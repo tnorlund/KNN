@@ -17,13 +17,13 @@ fig.align: "center"
 library(pracma)
 library(dplyr)
 library(ggplot2)
-library(e1071)
-library(latex2exp)
 ```
 
 In this problem, you will implement a Distance-Weighted Nearest Neighbor Classifier and run it on a 2-dimensional dataset. (You can’t use built-in knn functions in R to do this problem). You have to experiment with different distance measures and observe their influence on the classification performance.
 
 The training data has two classes as shown in figure 1. The training set along with test points and their correct label are saved in knnData.csv.
+
+![figure 1](plot.png)
 
 ```{R}
 dat <- read.csv("knnData.csv", header = TRUE)
@@ -32,13 +32,79 @@ ts <- dat %>% select(4,5,6)
 rm(dat)
 ```
 
-Apply 3-NN and report your accuracy rate on test points for the following distance measures:
+# Weighted Distance
 
-# $L_2$ norm 
+So in order to calculate the weighted distance, we need to define some functions. First, the generic function used to calulate the weighted distances, 
 
+$$\hat{f}(x_{q}) \leftarrow \frac{\sum_{i=1}^{k}w_{i}f(x_{i})}{\sum_{i=1}^{k}w_{i}} \text{,}$$
 
-# $L_1$ norm 
+can be used to calculate the weighted distance for each test point, $x_{q}$. The weight, 
 
+$$w_{i}=\frac{1}{d(x_{q}, x_{i})^{2}} \text{,}$$
 
-# $L_{\infty}$ norm
+is used to normalize the distances. The options we have are $L_{1}$, $L_{2}$, and $L_{\infty}$. The programatic function will need to have a condition for inifinity; infinity is not a number.
 
+$$\begin{align}
+L_{1}&: \sum |x_{i}| \\
+L_{2}&: \sum x_{i}^{2} \\
+L_{\infty}&: \texttt{max}\,( x_{i}) \\
+\end{align}
+$$
+
+```{R}
+weighted_distance <- function(x_indx, norm_indx) {
+  inf = FALSE
+  if (norm_indx == 'inf') {
+    norm_indx = 1
+    inf = TRUE
+  }
+  d <- (abs((tr$trainPoints_x1 - ts$testPoints_x1[x_indx])^norm_indx) + 
+  (abs(tr$trainPoints_x2 - ts$testPoints_x2[x_indx])^norm_indx))^1/norm_indx
+  d <- data.frame(distance = d, weight=1/(d^2), label=tr$trainLabel)
+  d <- d[order(d$distance),]
+  if (inf){
+    return(tail(d,1))
+  } else {
+    return(head(d,3))
+  }
+}
+```
+
+# KNN
+
+With the weighted distance out of the way, we can use the function with the unique parameters. Again, we must use a condition for inifinity.
+
+```{R}
+knn <- function(x_indx, norm_indx) {
+  n <- weighted_distance(x_indx, norm_indx)
+  if (norm_indx == 'inf') {
+    return(n$label)
+  }
+  class <- which.max(array(data = c(sum(n[n$label == -1,]$weight), sum(n[n$label == 1,]$weight)))/sum(n$weight))
+  if(class ) {
+    return(-1)
+  } else {
+    return(1)
+  }
+}
+```
+
+## $L_2$ norm 
+
+```{R}
+l2 <- lapply(1:40, knn, 2)
+sum(l2 == ts$testLabel)/40
+
+```
+
+## $L_1$ norm 
+```{R}
+l1 <- lapply(1:40, knn, 1)
+sum(l1 == ts$testLabel)/40
+l1
+```
+
+## $L_{\infty}$ norm
+```{R}
+lapply(1:40, knn, 'inf')
+```
